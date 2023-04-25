@@ -1,0 +1,42 @@
+---
+# Configures a Docker host
+
+- name: Add HTTPS transport support to APT
+  apt:
+    name: ['apt-transport-https', 'ca-certificates', 'curl', 'gnupg2', 'python3-pip']
+    state: latest
+    update_cache: yes
+  become: true
+
+- name: Add Docker's official GPG key
+  shell: curl -fsSL https://download.docker.com/linux/{{ ansible_lsb.id | lower }}/gpg | apt-key add -
+  become: true
+  args:
+    warn: False
+
+- name: Add dockers stable repository
+  template: src=docker.list.j2 dest=/etc/apt/sources.list.d/docker.list
+  become: true
+
+# install-recommends breaks installation on raspbian
+- name: Install latest version of docker
+  apt:
+    name: docker-ce
+    state: latest
+    update_cache: yes
+    install_recommends: "{{ false if ansible_lsb.id | lower == 'raspbian' else true }}"
+  become: true
+
+- name: Copy configuration
+  template:
+    src: templates/daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "u=rwx,g=rwx,o=rwx"
+  become: true
+  notify: Restart docker daemon
+
+- name: Install latest docker-compose
+  shell: pip3 install -U docker-compose
+  become: true

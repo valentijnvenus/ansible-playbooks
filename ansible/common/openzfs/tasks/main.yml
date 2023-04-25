@@ -1,0 +1,189 @@
+---
+# Builds and install OpenZFS
+
+#- name: Add HTTPS transport support to APT
+#  apt:
+#    name: ['apt-transport-https', 'ca-certificates', 'curl', 'gnupg2', 'python3-pip']
+#    state: latest
+#    update_cache: yes
+#  become: true
+
+- name: Hold all zfs-related upstream packages
+  ansible.builtin.shell: |
+    apt-mark hold zfsutils-linux
+    apt-mark hold zfs-zed
+
+- name: Purge ZFS upstream (ubuntu) packages if installed
+  ignore_errors: yes
+  ansible.builtin.command: |
+        apt purge --allow-change-held-packages -f -y zfsutils-linux zfs-zed
+
+- name: Install requirements for building ZFS
+  ansible.builtin.apt:
+    name: "{{ packages }}"
+    update_cache: yes
+    state: present
+  vars:
+    packages:
+      - build-essential
+      - autoconf
+      - automake
+      - libtool
+      - gawk
+      - alien
+      - fakeroot
+      - dkms
+      - libblkid-dev
+      - uuid-dev
+      - libudev-dev
+      - libssl-dev
+      - zlib1g-dev
+      - libaio-dev
+      - libattr1-dev
+      - libelf-dev
+      - "linux-headers-{{kernel_version}}"
+      - python3
+      - python3-dev
+      - python3-setuptools
+      - python3-cffi
+      - libffi-dev
+      - python3-packaging
+      - git
+      - libcurl4-openssl-dev
+
+- name: Create /opt/zfs
+  ansible.builtin.file:
+    path: /opt/zfs
+    state: directory
+
+- name: Download zfs
+  ansible.builtin.get_url:
+   #https://codeload.github.com/openzfs/zfs/zip/refs/tags/zfs-2.1.6
+    url: "https://github.com/openzfs/zfs/releases/download/zfs-{{ _zfs_version }}/zfs-{{ _zfs_version }}.tar.gz"
+    #checksum: "{{ _zfs_tarball_sha256_checksum }}"
+    mode: 0755
+    dest: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
+
+- name: Unzip zfs code
+  ansible.builtin.unarchive:
+    src: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
+    dest: "/opt/zfs"
+    remote_src: yes
+
+- name: Setup and Build ZFS
+  ansible.builtin.shell: |
+    ./autogen.sh
+    ./configure
+    make clean
+    make -j 32
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Install ZFS
+  ansible.builtin.shell: |
+        make install
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Force unload of ZFS module(s)
+  ansible.builtin.shell: |
+        ./scripts/zfs.sh -u
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Post-Install ZFS Helpers
+  ansible.builtin.shell: |
+        ./scripts/zfs-helpers.sh -i
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+#- name: Force reload of ZFS module
+#  ansible.builtin.shell: |
+#        ./scripts/zfs.sh
+#  args:
+#    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Build ZFS deb package
+  ansible.builtin.shell: |
+        make deb
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Install ZFS deb packages
+  ansible.builtin.shell: |
+    apt install --fix-broken -f -y
+    yes | dpkg -i --force-overwrite ./*.deb
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Modprobe zfs module
+  block:
+    - name: Install zfs kernel module
+      community.general.modprobe:
+        name: zfs
+        state: present
+
+- name: Ensure extra is in front
+  ansible.builtin.lineinfile:
+    path: /etc/modules-load.d/modules.conf
+    regexp: '^search'
+    line: "search extra updates ubuntu built-in"
+    state: present
+
+- name: dkms install zfs
+  ansible.builtin.shell: |
+        dkms install zfs/{{ _zfs_version }}
+  args:
+    chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
+
+- name: Ensure zfs-related systemd units are enabled
+  block:
+    - ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - zfs-import-cache.service
+        - zfs-import.target
+        - zfs-mount.service
+        - zfs-share.service
+        - zfs-zed.service
+        - zfs-volume-wait.service
+        - zfs.target
+
+- name: Hold all kernel upgrades to prevent custom built ZFS from doing fallback
+  ansible.builtin.shell: |
+    apt-mark hold linux-headers-generic
+    apt-mark hold linux-image-generic
+    apt-mark hold {{kernel_version}}
+
+- name: Ensure zfs kernel module comes up with next restart
+  tags: [ "zfs:post-install:config" ]
+  block:
+    - name: Add zfs module load file
+      ansible.builtin.template:
+        src: ansible/templates/kernel-modules/zfs.conf.j2
+        dest: /etc/modules-load.d/zfs.conf
+        owner: root
+        group: root
+        mode: 0644
+
+- name: Add systemd unit to support txg timeout customization
+  tags: [ "zfs:post-install:config" ]
+  block:
+    - name: Set current ZFS txg_timeout (to 1)
+      ansible.builtin.shell: |
+                echo 1 > /sys/module/zfs/parameters/zfs_txg_timeout
+    - name: install zfs-config-txg-timeout service
+      ansible.builtin.template:
+        src: ansible/templates/zfs-config-txg-timeout.service.j2
+        dest: /etc/systemd/system/zfs-config-txg-timeout.service
+        owner: root
+        group: root
+        mode: 0644
+    - name: start & enable zfs-config-txg-timeout service
+      ansible.builtin.systemd:
+        name: zfs-config-txg-timeout.service
+        state: started
+        enabled: yes
+        daemon_reload: yes

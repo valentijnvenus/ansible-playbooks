@@ -1,0 +1,45 @@
+# {{ ansible_managed }}. Created on {{ template_run_date }}
+
+[entryPoints]
+  [entryPoints.http]
+    address = ":80"
+  [entryPoints.https]
+    address = ":443"
+{% if traefik_dashboard_enabled %}
+  [entryPoints.traefik]
+    address = "127.0.0.1:8080"
+{% endif %}
+{% if traefik_extra_entrypoints is defined %}
+{% for key, value in traefik_extra_entrypoints.items() %}
+  [entryPoints.{{ key }}]
+    address = "{{ value }}"
+{% endfor %}
+{% endif %}
+
+[providers]
+  [providers.consulCatalog]
+    exposedByDefault = {{ traefik_consul_exposed_by_default | to_json }}
+    [providers.consulCatalog.endpoint]
+      address = "{{ traefik_consul_endpoint }}"
+  [providers.file]
+    directory = "/etc/traefik/dynamic"
+
+{% if traefik_dashboard_enabled %}
+[api]
+  dashboard = true
+{% endif %}
+
+[log]
+  level = "INFO"
+  filePath = "/var/log/traefik/traefik.log"
+
+[accessLog]
+  filePath = "/var/log/traefik/access.log"
+
+[certificatesResolvers]
+  [certificatesResolvers.default]
+    [certificatesResolvers.default.acme]
+      email = "{{ traefik_acme_email }}"
+      caServer = "{{ traefik_acme_ca_server }}"
+      storage = "/etc/traefik/acme.json"
+      [certificatesResolvers.default.acme.tlsChallenge]

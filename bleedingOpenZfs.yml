@@ -1,0 +1,15 @@
+#!/usr/bin/env ansible-playbook
+
+- name: Example ansile
+  hosts: localhost
+  gather_facts: true
+  vars:
+      kernel_version: "{{ansible_kernel}}"
+      _zfs_version: "2.1.6"
+      _zfs_txg_timeout_seconds: "1"
+      zfs_txg_timeout_seconds: "5"
+  tasks:
+    - debug:
+       var: kernel_version
+       var:  _zfs_version
+    - import_tasks: ansible/common/openzfs/tasks/main.yml

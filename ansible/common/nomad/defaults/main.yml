@@ -1,0 +1,97 @@
+---
+# Override these in playbook with 'vars:' block
+
+# Controls whether an agent is in server or client mode.
+nomad_agent_type: server
+
+# Specifies the region the Nomad agent is a member of.
+nomad_region: global
+
+# The data center in which the agent is running
+nomad_datacenter: dc1
+
+# The number of Nomad servers you will use; three or five is recommended.
+nomad_bootstrap_expect: 3
+
+# Specifies if the agent should log to syslog.
+nomad_enable_syslog: false
+
+# The secret key to use for encryption of Nomad network traffic
+nomad_encrypt: cg8StVXbQJ0gPvMd9o7yrg==
+
+# Specifies which address the Nomad agent should bind to for network services,
+# including the HTTP interface as well as the internal gossip protocol and 
+# RPC mechanism.
+nomad_bind_addr: 0.0.0.0
+
+# The server_join stanza specifies how the Nomad agent will discover and
+# connect to Nomad servers.
+nomad_retry_join: 
+
+# Specifies the token used to provide a per-request ACL token.
+# This option overrides the Consul Agent's default token. If the token is 
+# not set here or on the Consul agent, it will default to Consul's anonymous 
+# policy, which may or may not allow writes.
+nomad_consul_token: 
+
+# Specifies the name of the interface to force network fingerprinting on. 
+# All IP addresses except those scoped local for IPV6 on the chosen interface
+# are fingerprinted. The scheduler chooses from those IP addresses when
+# allocating ports for tasks. This is useful for binding docker ports only
+# on local interfaces, e.g., eth1. Only applies to clients.
+nomad_client_network_interface: 
+
+# Specifies an override for the network link speed. Most clients can determine
+# their speed automatically, and thus in most cases this should be left unset.
+nomad_client_network_speed: 
+
+# Allows an operator to specify a JSON file which is in the dockercfg format
+# containing authentication information for a private registry, from either
+# (in order) auths, credHelpers or credsStore.
+# {
+#   "auths": {
+#     "https://gcr.io": {
+#       "auth" : "<BASE64DATA>"
+#     }
+#   }
+# }
+nomad_client_docker_auth_path: null
+
+# A list of allowed Linux capabilities. Defaults to capabilities allowed by
+# docker by default.
+nomad_client_docker_allowed_caps: [
+  "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER", "MKNOD", "NET_RAW", "SETGID",
+  "SETUID", "SETFCAP", "SETPCAP", "NET_BIND_SERVICE", "SYS_CHROOT", "KILL",
+  "AUDIT_WRITE"
+]
+
+# Specifies if the Vault integration should be activated.
+# For more information on the architecture and setup, please see the Nomad and
+# Vault integration documentation.
+nomad_vault_enabled: false
+
+# Specifies the address to the Vault server. Consul DNS Forwarding is required
+# for DNS resolving to work. Otherwise use an IP address here.
+nomad_vault_address: "https://vault.service.consul:8200"
+
+# Specifies the parent Vault token to use to derive child tokens for jobs
+# requesting tokens.
+nomad_vault_token: "debecfdc-9ed7-ea22-c6ee-948f22cdd474"
+
+# Specifies the role to create tokens from. The token given to Nomad does not
+# have to be created from this role but must have "update" capability on
+# "auth/token/create/" path in Vault.
+nomad_vault_create_from_role: "nomad-cluster"
+
+# Enables TLS communication via HTTP and RPC to enforce secure cluster
+# communication between servers, clients, and between.
+nomad_tls_enable: false
+
+# The path to the CA certificate to use for Nomad's TLS communication.
+nomad_tls_ca_file: "/etc/nomad.d/tls/nomad-agent-ca.pem"
+
+# The path to the certificate file used for Nomad's TLS communication.
+nomad_tls_cert_file: "/etc/nomad.d/tls/{{ nomad_datacenter }}-{{ nomad_agent_type }}-nomad.pem"
+
+# The path to the key file to use for Nomad's TLS communication.
+nomad_tls_key_file: "/etc/nomad.d/tls/{{ nomad_datacenter }}-{{ nomad_agent_type }}-nomad-key.pem"

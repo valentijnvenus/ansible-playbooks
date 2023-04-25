@@ -1,0 +1,16 @@
+[Unit]
+Description=Set ZFS txg_timeout
+After=zfs.target
+ConditionPathIsDirectory=/sys/module/zfs
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bash -c 'echo {{ _zfs_txg_timeout_seconds | default(zfs_txg_timeout_seconds) }} > /sys/module/zfs/parameters/zfs_txg_timeout'
+
+# Not needed since we want it to always be whatever the setting is
+# ExecStop=/usr/bin/bash -c 'echo {{ _zfs_txg_timeout_seconds | default(zfs_txg_timeout_seconds) }} > /sys/module/zfs/parameters/zfs_txg_timeout'
+
+[Install]
+WantedBy=multi-user.target
+

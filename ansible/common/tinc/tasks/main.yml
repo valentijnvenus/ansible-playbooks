@@ -1,0 +1,89 @@
+---
+# Configures a tinc node
+
+- assert:
+    that:
+      - "tinc_build_root != none"
+      - "vpn_ip is defined"
+    msg: "Please verify that build_root and vpn_ip are specified. See the README on how to do that."
+
+- set_fact: safe_hostname="{{ vpn_ip.replace(".", "_") }}"
+
+- name: Stat host's SSH key
+  connection: local
+  stat:
+    path: "{{ tinc_build_root }}/{{ safe_hostname }}"
+  register: ssh_key_stat
+
+- name: Generate SSH key
+  connection: local
+  shell: ssh-keygen -q -t rsa -b 4096 -f {{ tinc_build_root }}/{{ safe_hostname }} -m pem -N '' -C '{{ ansible_hostname }}'
+
+- name: Generate main configuration file
+  connection: local
+  template:
+    src: templates/tinc.conf.j2
+    dest: "{{ tinc_build_root }}/{{ safe_hostname }}.conf"
+
+- name: Create host configuration directory
+  connection: local
+  file:
+    path: "{{ tinc_build_root }}/hosts"
+    state: directory
+
+- name: Generate host configuration file
+  connection: local
+  template:
+    src: templates/tinc.host.j2
+    dest: "{{ tinc_build_root }}/hosts/{{ safe_hostname }}"
+
+# the following bit is important - tinc expects keys to be in PEM format
+- name: "Append public key to host configuration files"
+  connection: local
+  shell: ssh-keygen -f {{ safe_hostname }}.pub -e -m pem >> "hosts/{{ safe_hostname }}"
+  args:
+    chdir: "{{ tinc_build_root }}/"
+  notify: Synchronize host configurations
+
+- name: Install tinc
+  apt: name=tinc,openssl state=latest update_cache=yes
+  become: true
+
+- name: Create network configuration directory
+  file:
+    path: "/etc/tinc/{{ tinc_netname }}"
+    state: directory
+  become: true
+
+- name: Upload main configuration file
+  copy:
+    src: "{{ tinc_build_root }}/{{ safe_hostname }}.conf"
+    dest: /etc/tinc/{{ tinc_netname }}/tinc.conf
+    mode: u+x,go-w
+  become: true
+
+- name: Upload SSH private key
+  copy:
+    src: "{{ tinc_build_root }}/{{ safe_hostname }}"
+    dest: /etc/tinc/{{ tinc_netname }}/{{ safe_hostname }}
+    mode: u+x,go-rw
+  become: true
+
+- name: Generate script for bringing the interface up
+  shell: echo ifconfig \$INTERFACE {{ vpn_ip }} netmask {{ tinc_network | ipaddr('netmask') }} > /etc/tinc/{{ tinc_netname }}/tinc-up
+  become: true
+
+- name: Generate script for bringing the interface down
+  shell: echo ifconfig \$INTERFACE down > /etc/tinc/{{ tinc_netname }}/tinc-down
+  become: true
+
+- name: Set permissions for interface scripts
+  file: path='{{ item }}' mode=u+x,go-w
+  with_items:
+    - "/etc/tinc/{{ tinc_netname }}/tinc-up"
+    - "/etc/tinc/{{ tinc_netname }}/tinc-down"
+  become: true
+
+- name: Start VPN
+  systemd: name="tinc@{{ tinc_netname }}" enabled=yes state=started daemon_reload=yes
+  become: true

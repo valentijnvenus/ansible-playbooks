@@ -1,0 +1,16 @@
+---
+# Override these in playbook with 'vars:' block
+
+# Configures the default logging driver.
+# The 'syslog' would be the most common choice here.
+# https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers
+docker_log_driver: "json-file"
+
+# Sets the DNS servers for all Docker containers
+docker_dns: []
+
+# IP address and netmask for the docker0 bridge, using standard CIDR notation
+docker_bridge_ip: "172.17.0.1/16"
+
+# Docker Engine is supported on amd64 (x86_64), armhf and arm64 architectures
+docker_architecture: "amd64"

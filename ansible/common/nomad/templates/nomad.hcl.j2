@@ -1,0 +1,84 @@
+# {{ ansible_managed }}.
+#
+# See https://www.nomadproject.io/docs/configuration
+
+region = "{{ nomad_region }}"
+datacenter = "{{ nomad_datacenter }}"
+
+data_dir = "/opt/nomad"
+enable_syslog = {{ nomad_enable_syslog | to_json }}
+bind_addr = {{ nomad_bind_addr | to_json }}
+
+{% if nomad_consul_token %}
+consul {
+  token = "{{ nomad_consul_token }}"
+}
+{% endif %}
+
+{% if nomad_agent_type == 'server' %}
+server {
+  enabled = true
+  bootstrap_expect = {{ nomad_bootstrap_expect }}
+  encrypt = "{{ nomad_encrypt }}"
+
+  server_join {
+    retry_join = {{ nomad_retry_join | to_json }}
+  }
+}
+{% else %}
+client {
+  enabled = true
+
+{% if nomad_client_network_interface %}
+  network_interface = "{{ nomad_client_network_interface }}"
+{% endif %}
+
+{% if nomad_client_network_speed %}
+  network_speed = "{{ nomad_client_network_speed }}"
+{% endif %}
+
+  server_join {
+    retry_join = {{ nomad_retry_join | to_json }}
+  }
+}
+{% endif %}
+
+{% if nomad_tls_enable %}
+tls {
+  http = true
+  rpc = true
+
+  ca_file = "{{ nomad_tls_ca_file }}"
+  cert_file = "{{ nomad_tls_cert_file }}"
+  key_file = "{{ nomad_tls_key_file }}"
+
+  verify_server_hostname = true
+  verify_https_client = true
+}
+{% endif %}
+
+{% if nomad_vault_enabled %}
+vault {
+  enabled = true
+  address = "{{ nomad_vault_address }}"
+
+  {% if nomad_agent_type == 'server' %}
+  token = "{{ nomad_vault_token }}"
+  create_from_role = "{{ nomad_vault_create_from_role }}"
+  {% endif %}
+}
+{% endif %}
+
+plugin "docker" {
+  config {
+    {% if nomad_client_docker_auth_path %}
+    auth {
+      config = "{{ nomad_client_docker_auth_path }}"
+    }
+    {% endif %}
+
+    {% if nomad_client_docker_allowed_caps %}
+    allow_caps = {{ nomad_client_docker_allowed_caps | to_json }}
+    {% endif %}
+  }
+}

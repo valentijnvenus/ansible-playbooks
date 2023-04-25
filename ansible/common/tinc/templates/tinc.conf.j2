@@ -1,0 +1,23 @@
+# {{ ansible_managed }}. Created on {{ template_run_date }}
+
+# Affects the address family of listening and outgoing sockets
+AddressFamily = ipv4
+
+# Which other tinc daemon to connect to on startup
+#
+# If you don’t specify a host with ConnectTo, tinc won’t try to connect to
+# other daemons at all, and will instead just listen for incoming connections.
+{% for host in play_hosts %}
+{% if vpn_ip != hostvars[host]['vpn_ip'] %}
+ConnectTo = {{ hostvars[host]['vpn_ip'].replace('.', '_') }}
+{% endif %}
+{% endfor %}
+
+# Symbolic name for this connection
+Name = {{ vpn_ip.replace('.', '_') }}
+
+# Full path name of the RSA private key file
+PrivateKeyFile = /etc/tinc/{{ tinc_netname }}/{{ vpn_ip.replace(".", "_") }}
+
+# Increasing the priority may help to reduce latency and packet loss on the VPN
+ProcessPriority = {{ tinc_process_priority }}
