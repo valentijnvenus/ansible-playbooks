@@ -5,7 +5,8 @@
   gather_facts: true
   vars:
       kernel_version: "{{ansible_kernel}}"
-      _zfs_version: "2.1.6"
+#      _zfs_version: "2.1.99-1868_g1ccfa698f"
+      _zfs_version: "2.1.99"
       _zfs_txg_timeout_seconds: "1"
       zfs_txg_timeout_seconds: "5"
   tasks:

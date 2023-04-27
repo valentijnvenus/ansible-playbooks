@@ -13,62 +13,75 @@
     apt-mark hold zfsutils-linux
     apt-mark hold zfs-zed
 
-- name: Purge ZFS upstream (ubuntu) packages if installed
+- name: Purge ZFS upstream packages if installed
   ignore_errors: yes
   ansible.builtin.command: |
         apt purge --allow-change-held-packages -f -y zfsutils-linux zfs-zed
 
-- name: Install requirements for building ZFS
-  ansible.builtin.apt:
-    name: "{{ packages }}"
-    update_cache: yes
-    state: present
-  vars:
-    packages:
-      - build-essential
-      - autoconf
-      - automake
-      - libtool
-      - gawk
-      - alien
-      - fakeroot
-      - dkms
-      - libblkid-dev
-      - uuid-dev
-      - libudev-dev
-      - libssl-dev
-      - zlib1g-dev
-      - libaio-dev
-      - libattr1-dev
-      - libelf-dev
-      - "linux-headers-{{kernel_version}}"
-      - python3
-      - python3-dev
-      - python3-setuptools
-      - python3-cffi
-      - libffi-dev
-      - python3-packaging
-      - git
-      - libcurl4-openssl-dev
+#- name: Install requirements for building ZFS
+#  ansible.builtin.apt:
+#    name: "{{ packages }}"
+#    update_cache: yes
+#    state: present
+#  vars:
+#    packages:
+#      - build-essential
+#      - autoconf
+#      - automake
+#      - libtool
+#      - gawk
+#      - alien
+#      - fakeroot
+#      - dkms
+#      - libblkid-dev
+#      - uuid-dev
+#      - libudev-dev
+#      - libssl-dev
+#      - zlib1g-dev
+#      - libaio-dev
+#      - libattr1-dev
+#      - libelf-dev
+#      - "linux-headers-{{kernel_version}}"
+#      - python3
+#      - python3-dev
+#      - python3-setuptools
+#      - python3-cffi
+#      - libffi-dev
+#      - python3-packaging
+#      - git
+#      - libcurl4-openssl-dev
 
 - name: Create /opt/zfs
   ansible.builtin.file:
     path: /opt/zfs
     state: directory
 
-- name: Download zfs
-  ansible.builtin.get_url:
-   #https://codeload.github.com/openzfs/zfs/zip/refs/tags/zfs-2.1.6
-    url: "https://github.com/openzfs/zfs/releases/download/zfs-{{ _zfs_version }}/zfs-{{ _zfs_version }}.tar.gz"
-    #checksum: "{{ _zfs_tarball_sha256_checksum }}"
-    mode: 0755
-    dest: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
+#- name: Download zfs
+#  ansible.builtin.get_url:
+#   #https://codeload.github.com/openzfs/zfs/zip/refs/tags/zfs-2.1.6
+#    url: "https://github.com/openzfs/zfs/releases/download/zfs-{{ _zfs_version }}/zfs-{{ _zfs_version }}.tar.gz"
+#    #checksum: "{{ _zfs_tarball_sha256_checksum }}"
+#    mode: 0755
+#    dest: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
 
-- name: Unzip zfs code
-  ansible.builtin.unarchive:
-    src: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
-    dest: "/opt/zfs"
-    remote_src: yes
+#- name: Unzip zfs code
+#  ansible.builtin.unarchive:
+#    src: "/opt/zfs/zfs-{{ _zfs_version }}.tar.gz"
+#    dest: "/opt/zfs"
+#    remote_src: yes
+
+- name: Clone ZFS-master branch
+  vars:
+    GIT_REPO: https://github.com/valentijnvenus/zfs
+    GIT_BRANCH: master
+    USER: debian
+    PROJECT_NAME: ansible-clone-repo
+
+  ansible.builtin.git:
+    repo: "{{ GIT_REPO }}"
+    dest: "/opt/zfs/zfs-{{ _zfs_version }}"
+    single_branch: yes
+    version: "{{ GIT_BRANCH }}"
 
 - name: Setup and Build ZFS
   ansible.builtin.shell: |
@@ -111,7 +124,12 @@
 
 - name: Install ZFS deb packages
   ansible.builtin.shell: |
-    apt install --fix-broken -f -y
+    # with /var/lib/dkms/zfs/ -> /opt/zfs/zfs-2.1.99/module/ using
+    #  ln -s /opt/zfs/zfs-2.1.99/module/ /var/lib/dkms/zfs-2.1.99
+    # do:
+    # dkms install -m zfs -v 2.1.99 # Error! The module/version combo: is not located in the DKMS tree ln symbolic
+    apt install --fix-broken -f -o Dpkg::Options::="--force-overwrite" -y
+    # yes | dpkg -P ./*.deb # remove packages to prevent dpkg error: "trying to overwrite file, which is also in..."
     yes | dpkg -i --force-overwrite ./*.deb
   args:
     chdir: "/opt/zfs/zfs-{{ _zfs_version }}"
@@ -127,7 +145,7 @@
   ansible.builtin.lineinfile:
     path: /etc/modules-load.d/modules.conf
     regexp: '^search'
-    line: "search extra updates ubuntu built-in"
+    line: "search extra updates debian ubuntu built-in"
     state: present
 
 - name: dkms install zfs
